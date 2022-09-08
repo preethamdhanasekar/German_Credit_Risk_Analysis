@@ -1,0 +1,311 @@
+---
+title: "Untitled"
+author: "Akshaya"
+date: "2/17/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+install.packages("tidyverse")
+install.packages("dplyr")
+install.packages("readxl")
+```
+
+```{r}
+install.packages("DataExplorer")
+install.packages("reshape2")
+```
+
+```{r}
+
+library(readxl)
+library(ggplot2)
+library(tidyverse)
+```
+```{r}
+library(dplyr)
+```
+
+```{r}
+library(DataExplorer)
+library(reshape2)
+```
+
+```{r}
+#Loading Dataset German Credit 
+gc <- read_excel("C:/Users/asubra31/Desktop/UIC_MIS/UIC_SEM2/IDS572_DM/Assignment 2/German Credit.xls")
+View(gc)
+```
+
+```{r}
+#Appending Column names to Dataset Variables
+colnames(gc) <- c("obs","chk_acct", "duration", "credit_his", "new_car_purpose", "used_car_purpose","furniture_purpose","radio/tv_purpose","education_purpose","retraining_purpose","amount","saving_acct","employment","install_rate","male_div","male_single","male_mar_wid","co_appl","guarantor","present_resident","real_estate","prop_unkn_none","age", "other_install", "rent","own_res", "n_credits", "job", "n_dependent", "telephone", "foreign", "response")
+```
+
+```{r}
+#Displaying Structure of Dataset
+str(gc)
+```
+
+```{r}
+#Converting Numeric Data variables into Categorical
+names <- c('obs','chk_acct','credit_his','saving_acct','employment','present_resident','job')
+gc[,names] <- lapply(gc[,names],factor)
+```
+
+
+```{r}
+#Summary Statistics of Dataset variables 
+summary(gc)
+```
+
+```{r}
+#Data Quality Check - Identifying Missing/Null Values
+data_qual <- t(introduce(gc))
+colnames(data_qual)<- "Values"
+data_qual
+plot_intro(gc)
+
+#We find that our data, German Credit does not have any missing columns or observations. 
+```
+
+```{r}
+#Calculating % Good and Bad Credit
+Response <- gc %>% 
+  count(response) %>% 
+  mutate(perc = n / nrow(gc)) 
+
+Response %>%
+ ggplot(aes(x=response,y= perc,fill=as.factor(response))) +
+ geom_bar(stat="identity") +
+ labs(title="Credit Worthiness") +
+  geom_text(aes(label=scales::percent(perc)), position = position_stack(vjust = 1.01))+
+  scale_y_continuous(labels = scales::percent)+
+  scale_fill_manual(values = c("1" = "green", "0" = "red")) +
+  scale_fill_discrete(name="Credit Worthiness",labels = c("0" = "Bad Credit/0", "1" = "Good Credit/1"))
+
+#We visualize the outcome of credit worthiness to be biased towards Good Credit. About 70% of applicants have a Good Credit and 30% out of the 1000 applicants have Bad Credit. Therefore, we can say that the classes are unbalanced. 
+```
+
+```{r}
+#Exploratory Data Analysis - Continuous Variables in Dataset 
+##We have 7 Continuous variables - Duration, Amount, Installment Rate, Present Resident, Age, Number of Credits and Number of Dependents
+par(mfrow=c(2,3))
+boxplot(gc$duration, col = "lightblue", xlab="Duration")
+boxplot(gc$amount, col = "lightblue", xlab="Amount")
+boxplot(gc$install_rate, col = "lightblue", xlab="Installment Rate")
+boxplot(gc$age, col = "lightblue", xlab="Age")
+boxplot(gc$n_credits, col = "lightblue", xlab="Num Credits")
+boxplot(gc$n_dependent, col = "lightblue", xlab="Num People")
+
+#We see that the variables Age, Duration, Amount and Num of Credits have outliers. Therefore, we will analyze these variables further with respect to the target variable response
+```
+
+```{r}
+#Analyzing trend in age variable wrt Target variable response
+gc %>%
+  ggplot(data = .) + 
+  geom_boxplot(mapping = aes(x=response,y=age,fill=as.factor(response)), outlier.color="red") +       ggtitle("Applicant's Age grouped by Credit Worthiness") +
+  xlab("Response") + 
+  ylab("Age") +
+  scale_fill_manual(values = c("1" = "green", "0" = "red")) +
+  scale_x_continuous(breaks = seq(0, 1, by = 1)) +
+  scale_fill_discrete(name="Credit Worthiness",labels = c("0" = "Bad Credit/0", "1" = "Good Credit/1"))
+
+#We visualize the outcome to have a lower median value for Bad Credit when compared to median value 
+#for Good Credit. As it might be premature to conclude that young applicants tend to have bad credit, we can safely say that it tends to be riskier. 
+
+```
+```{r}
+#Removing Outliers 
+Q1 <- quantile(gc$age, .25)
+Q3 <- quantile(gc$age, .75)
+IQR <- IQR(gc$age)
+gc <- subset(gc,(gc$age < 60))
+boxplot(gc$age, col = "lightblue", xlab="Age")
+```
+
+
+```{r}
+#Analyzing trend in Duration variable wrt Target variable response
+gc %>%
+  ggplot(data = .) + 
+  geom_boxplot(mapping = aes(x=response,y=duration,fill=as.factor(response)), outlier.color="red") +       ggtitle("Applicant's Duration (in months) grouped by Credit Worthiness") +
+  xlab("Response") + 
+  ylab("Duration (in months") +
+  scale_fill_manual(values = c("1" = "green", "0" = "red")) +
+  scale_x_continuous(breaks = seq(0, 1, by = 1)) +
+  scale_fill_discrete(name="Credit Worthiness",labels = c("0" = "Bad Credit/0", "1" = "Good Credit/1"))
+
+#We visualize the outcome to have a lower median value and range for Good Credit when compared to median value for Bad Credit.
+```
+```{r}
+#Removing Outliers
+Q1 <- quantile(gc$duration, .25)
+Q3 <- quantile(gc$duration, .75)
+IQR <- IQR(gc$duration)
+gc <- subset(gc,(gc$duration> (Q1-1.5*IQR) & gc$duration< (Q3+1.5*IQR)))
+boxplot(gc$duration, col = "lightblue", xlab="Duration")
+```
+
+
+```{r}
+#Analyzing trend in Amount variable wrt Target variable response
+avg_amount <- gc %>%
+  select(amount, response) %>%
+  group_by(response) %>%
+  summarise(m=mean(amount))
+
+gc%>% 
+  ggplot(aes(amount))+
+  geom_density(aes(fill=as.factor(response)),alpha=0.7) + 
+  geom_vline(data=avg_amount,aes(xintercept= m , colour= as.factor(response)), lty = 4 ,size=2)+
+  ggtitle("Applicant's Amount grouped by Credit Worthiness") +
+   xlab("Amount") + 
+  ylab("") +
+  scale_fill_discrete(name="Credit Worthiness",labels = c("0" = "Bad Credit/0", "1" = "Good Credit/1")) +
+   scale_color_discrete(name="Credit Worthiness",labels = c("0" = "Bad Credit/0", "1" = "Good Credit/1"))
+
+gc %>%
+  ggplot(data = .) + 
+  geom_boxplot(mapping = aes(x=response,y=amount,fill=as.factor(response)), outlier.color="red") +       ggtitle("Applicant's Amount grouped by Credit Worthiness") +
+  xlab("Response") + 
+  ylab("Amount") +
+  scale_fill_manual(values = c("1" = "green", "0" = "red")) +
+  scale_x_continuous(breaks = seq(0, 1, by = 1)) +
+  scale_fill_discrete(name="Credit Worthiness",labels = c("0" = "Bad Credit/0", "1" = "Good Credit/1"))
+
+
+#The vertical line in the density plot depicts the mean value of the amount wrt credit worthiness. We visualize the outcome to have a lower median value and range for Good Credit when compared to median value for Bad Credit. Moreover, a right skewed distribution can be identified in the data.
+
+```
+```{r}
+#Removing Outliers
+Q1 <- quantile(gc$amount, .25)
+Q3 <- quantile(gc$amount, .75)
+IQR <- IQR(gc$amount)
+gc <- subset(gc, gc$amount< 5000)
+boxplot(gc$amount, col = "lightblue", xlab="Amount")
+```
+
+```{r}
+#Analyzing trend in Number of Credits variable wrt Target variable response
+gc %>%
+  ggplot(data = .) + 
+  geom_boxplot(mapping = aes(x=response,y=n_credits,fill=as.factor(response)), outlier.color="red") +       ggtitle("Applicant's Amount grouped by Credit Worthiness") +
+  xlab("Response") + 
+  ylab("Number of Credits") +
+  scale_fill_manual(values = c("1" = "green", "0" = "red")) +
+  scale_x_continuous(breaks = seq(0, 1, by = 1)) +
+  scale_fill_discrete(name="Credit Worthiness",labels = c("0" = "Bad Credit/0", "1" = "Good Credit/1"))
+
+```
+```{r}
+#Removing Outliers
+Q1 <- quantile(gc$n_credits, .25)
+Q3 <- quantile(gc$n_credits, .75)
+IQR <- IQR(gc$n_credits)
+gc <- subset(gc,(gc$n_credits >(Q1-1.5*IQR) & gc$n_credits< (Q3+1.5*IQR)))
+boxplot(gc$amount, col = "lightblue", xlab="Amount")
+```
+
+```{r}
+library(GGally)
+```
+
+```{r}
+#Correlation of Continuous Variables
+crgc <- gc %>%
+  select(duration, amount, age, install_rate, n_credits, n_dependent,response) 
+
+ggpairs(crgc)
+
+```
+
+
+```{r}
+#Exploratory Data Analysis - Categorical Variables in Dataset 
+##We have 6 Categorical variables - Checking Account, Credit History, Saving Account, Employment, Present Residence and Job
+#Analyzing trend in Checking Account variable wrt Target variable response
+gc$response <- as.factor(gc$response)
+ggplot(gc, aes(x=chk_acct,y= ..count..)) + 
+  geom_bar(aes(fill = response), position = "dodge")
+
+```
+
+```{r}
+#Analyzing trend in Credit history variable wrt Target variable response
+ggplot(gc,aes(x=credit_his, y=..count..)) + 
+  geom_bar(aes(fill= response), position ="dodge")
+
+```
+
+```{r}
+#Analyzing trend in Savings Account variable wrt Target variable response
+ggplot(gc,aes(x=saving_acct, y=..count..)) + 
+  geom_bar(aes(fill= response), position ="dodge")
+
+```
+
+```{r}
+#Analyzing trend in Employment variable wrt Target variable response
+ggplot(gc, aes(x=present_resident, y=..count..)) + 
+  geom_bar(aes(fill = response), position = "dodge")
+
+```
+
+```{r}
+#Analyzing trend in Present Residence variable wrt Target variable response
+ggplot(gc, aes(x=employment, y=..count..)) + 
+  geom_bar(aes(fill = response), position = "dodge")
+```
+
+```{r}
+#Analyzing trend in Job variable wrt Target variable response
+ggplot(gc, aes(x=job, y=..count..)) + 
+  geom_bar(aes(fill = response), position = "dodge")
+```
+
+```{r}
+install.packages("rpart")
+library(rpart)
+```
+```{r}
+install.packages("rpart.plot")
+library(rpart.plot)
+```
+
+```{r}
+#gc$response <- as.factor(ifelse(gc$response == 1, "High", "Low"))
+data <- gc[-1]
+
+set.seed(34)
+indx <- sample(2, nrow(data), replace= TRUE, prob = c(0.8, 0.2))
+train <- data[indx == 1, ]
+test <- data[indx == 2, ]
+
+tree_model <- rpart(response ~ ., train)
+
+print(tree_model)
+rpart.plot(tree_model)
+
+```
+```{r}
+
+tree_pred_class <- predict(tree_model, train, type = "class")
+trainerror <- mean(tree_pred_class != train$response)
+print(trainerror)
+
+tree_pred_test <- predict(tree_model, test, type = "class")
+testerror <- mean(tree_pred_test != test$response)
+print(testerror)
+```
+```{r}
+
+```
+
+
